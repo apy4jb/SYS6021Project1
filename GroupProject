@@ -1,0 +1,77 @@
+---
+title: "GroupAssignment"
+output: html_document
+date: "2023-10-18"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+source_dir <- "C:/Users/Blake Zimbardi/Desktop/r/source" 
+data_dir <- "C:/Users/Blake Zimbardi/Desktop/r/working/Train Data" 
+
+install.packages("ggplot2")
+install.packages("psych")
+install.packages("tidyverse")
+install.packages("lattice")
+install.packages("dplyr")
+library(ggplot2)
+library(psych)
+library(tidyverse)
+library(lattice)
+library(dplyr)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+```{r}
+setwd(source_dir)
+getwd()
+source("AccidentInput.R")
+source("PCAplots.R")
+list = file.inputl(data_dir)
+df = combine.data(list, )
+
+# Create Causalty variable
+df2 = df
+df2["Causalty"] = df["TOTKLD"] + df["TOTINJ"]
+# Remove data without a Causalty
+totacts_posCas <- filter(df2, Causalty > 0)
+# Remove duplicate reports
+totacts_posCas_nd <- totacts_posCas %>% distinct(INCDTNO, YEAR, MONTH, DAY, TIMEHR, TIMEMIN, .keep_all = TRUE)
+# Box Plots of Type of Train vs. Total Casualties per accident
+ggplot(data = totacts_posCas_nd, aes(x = TYPEQ, y = Causalty)) +
+  geom_boxplot() +
+  coord_flip() +
+  scale_fill_grey(start = 0.5, end = 0.8) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggtitle("Box Plots of Total Causalties") +
+  labs(y = "# of Causalties", x = "Type of Train")
+# Type of train w/ largest number of accidents w/ >=1 casualties
+table(totacts_posCas_nd$TYPEQ)
+
+# Null Hypothesis: Accidents involving Freight Trains cause more significant casualties than other types of trains.
+# Alternative Hypothesis: Accidents involving Freight Trains do not cause more significant causalties than other types of trains.
+
+# These hypothesis are actionable since testing this hypothesis will reveal the type of train with my significant impacts on causalties during accidents. Train safety can be improved by further analyzing accidents involving the most significant type of train to determine what safety components of the train design (i.e. conductor visibility, braking mechanisms, regulations) could be changed in favor of reducing severity of tail accidents.
+
+# This hypothesis stems from box plots comparing total number of causalties vs. different types of trains. Similarly, we observe that the type of train with largest number of accidents involving 1 or more causalties are freight trains. Finally, the East Palestine train derailment on February 3rd, 2023 peaked our interest in Freight Train accidents. While no causalties were reported, other notable freight train accidents like the 1986 Miamisburg train derailment (also in Ohio) and the 2005 Grainteville train crash (in South Carolina) are similar freight train accidents that not only caused multiple causalties, but also released toxic chemicals to the environment.
+
+# East Palestine: https://www.theguardian.com/us-news/2023/feb/11/ohio-train-derailment-wake-up-call
+# Miamisburg: https://www.washingtonpost.com/archive/politics/1986/07/09/17000-evacuated-after-derailment/f6a0f635-bebb-4342-8c62-23304b12876e/
+# Graniteville: https://web.archive.org/web/20140719212353/http://www.wjbf.com/story/21686984/federal-prosecutors-say-norfolk-southern-should-be-fined-for-graniteville-pollution 
+
+```
+```{r}
+
+```
+
