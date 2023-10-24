@@ -1,0 +1,145 @@
+---
+title: "Lea-Group Project 1"
+output: html_notebook
+---
+
+Setup
+```{r}
+library(ggplot2)
+library(psych)
+library(magrittr)
+library(dplyr)
+library(lattice)
+library(here)
+library(ggpubr)
+library(ggfortify)
+library(MASS)
+library(lindia)
+
+source("/Users/leajih-vieira/Downloads/UVA Grad/SYS 6021/AccidentInput.R")
+```
+
+Load data and filter for extreme values
+```{r}
+acts <- file.inputl("/Users/leajih-vieira/Downloads/UVA Grad/SYS 6021/Train Data")
+
+sapply(acts, dim)
+totacts <- combine.data(acts)
+
+dmgbox <-boxplot(totacts$ACCDMG)
+
+xdmg <- totacts[totacts$ACCDMG > dmgbox$stats[5],]
+
+## Remove 9/11
+xdmg <- xdmg[-181,]
+
+# Remove duplicates from xdmg and call new data frame xdmgnd
+xdmgnd <- xdmg[!(duplicated(xdmg[, c("INCDTNO", "YEAR", "MONTH", "DAY", "TIMEHR", "TIMEMIN")])),]
+
+## Reset rownames
+rownames(xdmgnd) <- NULL
+```
+
+The most common accident causes are human error (https://www.sidgilreath.com/railroad-accidents-causes.html). Want to test if human error accidents vs other causes is significant.
+
+Create a new column, hError, that indicates whether the cause was human error or not.
+```{r}
+xdmgnd$hError <- 0
+
+for (i in 1:nrow(xdmgnd)) {
+  code <- substr(xdmgnd[i, "CAUSE"], 1, 1)
+  
+  if (code == "H") {
+    xdmgnd[i, "hError"] <- 1
+  }
+}
+```
+
+Another common accident cause is unprotected crossings. We do not have information as to whether an accident occurred at an unprotected crossing, but we do have information as to whether an accident occurred at a crossing. This is another variable I'm interested in exploring, despite it having limited power in telling us the exact details of the kind of crossing it was, there may still be interesting trends from this.
+
+Create a new column, crossing, that indicates whether the accident was at a railroad crossing.
+```{r}
+xdmgnd$crossing <- 0
+
+for (i in 1:nrow(xdmgnd)) {
+  xdmgnd[i, "crossing"] <- xdmgnd$TYPE[i] == 7 || xdmgnd$TYPE[i] == 8 # Hwy-rail crossing or RR Grade Crossing
+}
+```
+
+Derailments are another common cause.
+
+Create a new column, derail, that indicates whether the accident was a derailment.
+```{r}
+xdmgnd$derail <- 0
+
+for (i in 1:nrow(xdmgnd)) {
+  xdmgnd[i, "derail"] <- xdmgnd$TYPE[i] == 1 # Derailment
+}
+```
+
+Exploratory Analysis
+```{r}
+ggplot(xdmgnd, aes(x = as.factor(hError))) +
+  geom_bar() + 
+  labs(y= "Count", x = "Primary Cause of Accident") + 
+  scale_x_discrete(labels=c("Non-Human Error", "Human Error"))
+```
+```{r}
+ggplot(xdmgnd, aes(x = as.factor(crossing))) +
+  geom_bar() + 
+  labs(y= "Count", x = "Type of Accident") + 
+  scale_x_discrete(labels=c("Non-Crossing", "Crossing"))
+```
+```{r}
+ggplot(xdmgnd, aes(x = as.factor(derail))) +
+  geom_bar() + 
+  labs(y= "Count", x = "Type of Accident") + 
+  scale_x_discrete(labels=c("Non-Derailment", "Derailment"))
+```
+
+```{r}
+pairs.panels(xdmgnd[ , c("ACCDMG", "TYPE", "hError", "crossing", "derail")])
+```
+
+Hypotheses:
+(there is not a statistically significant relationship between an individual's weight and that person's age and height)
+Null: Human error accidents and crossing-related accidents do not have any effect on the accident damage costs
+Alternative: Human error accidents and crossing-related accidents have a significant effect on the accident damage costs
+
+```{r}
+xdmgnd.main <- lm(ACCDMG ~ hError + crossing + TRNSPD*derail, data= xdmgnd)
+
+summary(xdmgnd.main)
+```
+```{r}
+xdmgnd.inter <- lm(ACCDMG ~ (hError + crossing + TRNSPD*derail)^2, data= xdmgnd)
+
+summary(xdmgnd.inter)
+```
+```{r}
+autoplot(xdmgnd.main, which=1:6, label.size = 3) + theme_bw()
+autoplot(xdmgnd.main, which=1, label.size = 3) + theme_bw()
+```
+
+```{r}
+boxcox(xdmgnd.main)
+boxcox(xdmgnd.inter)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
