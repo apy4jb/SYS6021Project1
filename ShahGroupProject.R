@@ -17,28 +17,7 @@ acts <- file.inputl(traindir)
 # combine into one data frame
 totacts <- combine.data(acts)
 
-# setup categorical variables
-totacts$TYPE <- factor(totacts$TYPE, labels = c("Derailment", "HeadOn", 
-                                                "Rearend", "Side", "Raking", "BrokenTrain", "Hwy-Rail", 
-                                                "GradeX", "Obstruction", "Explosive", "Fire","Other",
-                                                "SeeNarrative" ))
-
-totacts$TYPEQ <- factor(totacts$TYPEQ, labels = c("NA", "NA", "Freight", "Passenger", "Commuter", 
-                                                  "Work",  "Single", "CutofCars", "Yard", "Light", "Maint",
-                                                  "MaintOfWay", "Passenger", "Commuter", "ElectricMulti", "ElectricMulti"))
-
-totacts$Cause <- rep(NA, nrow(totacts))
-
-totacts$Cause[which(substr(totacts$CAUSE, 1, 1) == "M")] <- "M"
-totacts$Cause[which(substr(totacts$CAUSE, 1, 1) == "T")] <- "T"
-totacts$Cause[which(substr(totacts$CAUSE, 1, 1) == "S")] <- "S"
-totacts$Cause[which(substr(totacts$CAUSE, 1, 1) == "H")] <- "H"
-totacts$Cause[which(substr(totacts$CAUSE, 1, 1) == "E")] <- "E"
-
-totacts$Cause <- factor(totacts$Cause)
-
-
-#Create the 'Casualty' variable
+#Create the Casualty variable
 df2 <- totacts
 df2$Casualty <- df2$TOTKLD + df2$TOTINJ
 #Remove data without a 'Casualty'
