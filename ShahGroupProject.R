@@ -71,9 +71,9 @@ AIC(model)
 #Null Hypothesis: There is no significant correlation between train speed and the number of casualties in accidents.
 #Alternative Hypothesis: Train speed is significantly correlated with the number of casualties in accidents.
 
-# Based on the p-value for TRNSPD (0.00285), we can reject the null hypothesis and conclude that
+# Based on the p-value for TRNSPD, we can reject the null hypothesis and conclude that
 # there is a statistically significant correlation between train speed and the number of casualties in extreme railroad accidents.
-# However, the low R-squared value (0.002279) suggests that train speed explains only a very small proportion of the variation in casualties.
+# However, the low R-squared value suggests that train speed explains only a very small proportion of the variation in casualties.
 
 
 
