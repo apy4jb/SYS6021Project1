@@ -8,15 +8,9 @@ date: "2023-10-18"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
 ```{r cars}
-source_dir <- "C:/Users/Blake Zimbardi/Desktop/r/source" 
-data_dir <- "C:/Users/Blake Zimbardi/Desktop/r/working/Train Data" 
+data_dir <- "C:/Users/blakezimbardi/Documents/school/fall2023/SYS6021/working/Train Data"
+source_dir <-"C:/Users/blakezimbardi/Documents/school/fall2023/SYS6021/PCA"
 
 install.packages("ggplot2")
 install.packages("psych")
@@ -28,12 +22,16 @@ library(psych)
 library(tidyverse)
 library(lattice)
 library(dplyr)
+library(here)
+library(ggpubr)
+library(ggfortify)
+library(MASS)
+library(lindia)
+library(olsrr)
+library(car)
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-```{r}
+```{r set dir and cleanup}
 setwd(source_dir)
 getwd()
 source("AccidentInput.R")
@@ -44,10 +42,35 @@ df = combine.data(list, )
 # Create Causalty variable
 df2 = df
 df2["Causalty"] = df["TOTKLD"] + df["TOTINJ"]
+
+# Add labels to TYPEQ
+df2$TYPE <- factor(df2$TYPE, labels = c("Derailment", "HeadOn", 
+                                                "Rearend", "Side", "Raking", "BrokenTrain", "Hwy-Rail", 
+                                                "GradeX", "Obstruction", "Explosive", "Fire","Other",
+                                                "SeeNarrative" ))
+
+df2$TYPEQ <- factor(df2$TYPEQ, labels = c("NA", "NA", "Freight", "Passenger", "Commuter", 
+                                                  "Work",  "Single", "CutofCars", "Yard", "Light", "Maint",
+                                                  "MaintOfWay", "Passenger", "Commuter", "ElectricMulti", "ElectricMulti"))
+
+
+df2$Cause <- rep(NA, nrow(df2))
+
+df2$Cause[which(substr(df2$CAUSE, 1, 1) == "M")] <- "M"
+df2$Cause[which(substr(df2$CAUSE, 1, 1) == "T")] <- "T"
+df2$Cause[which(substr(df2$CAUSE, 1, 1) == "S")] <- "S"
+df2$Cause[which(substr(df2$CAUSE, 1, 1) == "H")] <- "H"
+df2$Cause[which(substr(df2$CAUSE, 1, 1) == "E")] <- "E"
+
+df2$Cause <- factor(df2$Cause)
+
+
 # Remove data without a Causalty
 totacts_posCas <- filter(df2, Causalty > 0)
+# Remove data with Null or empty
+totacts_posCas_null <- filter(totacts_posCas, TYPEQ != "NULL" & TYPEQ != "")
 # Remove duplicate reports
-totacts_posCas_nd <- totacts_posCas %>% distinct(INCDTNO, YEAR, MONTH, DAY, TIMEHR, TIMEMIN, .keep_all = TRUE)
+totacts_posCas_nd <- totacts_posCas_null %>% distinct(INCDTNO, YEAR, MONTH, DAY, TIMEHR, TIMEMIN, .keep_all = TRUE)
 # Box Plots of Type of Train vs. Total Casualties per accident
 ggplot(data = totacts_posCas_nd, aes(x = TYPEQ, y = Causalty)) +
   geom_boxplot() +
@@ -58,9 +81,17 @@ ggplot(data = totacts_posCas_nd, aes(x = TYPEQ, y = Causalty)) +
   labs(y = "# of Causalties", x = "Type of Train")
 # Type of train w/ largest number of accidents w/ >=1 casualties
 table(totacts_posCas_nd$TYPEQ)
+table(totacts_posCas_nd$TYPE)
+```
 
+```{r hypothesis}
 # Null Hypothesis: Accidents involving Freight Trains cause more significant casualties than other types of trains.
-# Alternative Hypothesis: Accidents involving Freight Trains do not cause more significant causalties than other types of trains.
+
+
+
+
+# Null Hypothesis: For a given accident, the Type of Train is significant in determining the number of casualties.
+# Alternative Hypothesis: For a given accident, the Type of train is not significant in determining the number of casualties.
 
 # These hypothesis are actionable since testing this hypothesis will reveal the type of train with my significant impacts on causalties during accidents. Train safety can be improved by further analyzing accidents involving the most significant type of train to determine what safety components of the train design (i.e. conductor visibility, braking mechanisms, regulations) could be changed in favor of reducing severity of tail accidents.
 
@@ -71,7 +102,79 @@ table(totacts_posCas_nd$TYPEQ)
 # Graniteville: https://web.archive.org/web/20140719212353/http://www.wjbf.com/story/21686984/federal-prosecutors-say-norfolk-southern-should-be-fined-for-graniteville-pollution 
 
 ```
-```{r}
 
+```{r upper whisker data}
+# use only upper whisker data
+causbox <-boxplot(totacts_posCas_nd$Causalty)
+
+ggplot(as.data.frame(totacts_posCas_nd$Causalty), aes(x=totacts_posCas_nd$Causalty)) + 
+  geom_boxplot(col= "steelblue") + theme(plot.title = element_text(hjust = 0.5)) + coord_flip()
+
+
+causdmg <- totacts_posCas_nd[totacts_posCas_nd$Causalty > causbox$stats[5],]
+```
+
+```{r graph graphs}
+causdmg.lm1<-lm(Causalty ~ (TYPEQ + TYPE)^2,data=causdmg)
+summary(causdmg.lm1)
+ols_test_breusch_pagan(causdmg.lm1) # error does have non-constant variance
+vif(causdmg.lm1)
+```
+
+```{r diagnostic plots}
+# gg_diagnose(causdmg.lm1)
+
+#with autoplot
+autoplot(causdmg.lm1, which=1:6, label.size = 3) + theme_bw()
+
+autoplot(causdmg.lm1, which = c(1,2,3,5), ncol = 2, label.size = 3) + theme_bw()
+
+#Plot graphs individually
+
+autoplot(causdmg.lm1,which=1, ncol = 1, label.size = 3) + theme_bw()#Residual vs. Fitted
+
+
+autoplot(causdmg.lm1,which=2, ncol = 1, label.size = 3) + theme_bw() #QQ
+
+
+autoplot(causdmg.lm1,which=3, ncol = 1, label.size = 3) + theme_bw() #Scale-Location
+
+
+autoplot(causdmg.lm1, which=4, ncol = 1, label.size = 3) + theme_bw() #Cook's distance
+
+
+autoplot(causdmg.lm1,which=5,ncol = 1, label.size = 3) + theme_bw() #Redisuals vs. Leverage
+
+
+autoplot(causdmg.lm1,which=6, ncol = 1, label.size = 3) + theme_bw() #Cook's dist vs. Leverage
+```
+
+```{r backwards step regression}
+causdmg.lm1.step <- step(causdmg.lm1)
+summary(causdmg.lm1.step)
+# vif(causdmg.lm1.step)
+#with autoplot
+autoplot(causdmg.lm1.step, which=1:6, label.size = 3) + theme_bw()
+
+autoplot(causdmg.lm1.step, which = c(1,2,3,5), ncol = 2, label.size = 3) + theme_bw()
+
+#Plot graphs individually
+
+autoplot(causdmg.lm1.step,which=1, ncol = 1, label.size = 3) + theme_bw()#Residual vs. Fitted
+
+
+autoplot(causdmg.lm1.step,which=2, ncol = 1, label.size = 3) + theme_bw() #QQ
+
+
+autoplot(causdmg.lm1.step,which=3, ncol = 1, label.size = 3) + theme_bw() #Scale-Location
+
+
+autoplot(causdmg.lm1.step, which=4, ncol = 1, label.size = 3) + theme_bw() #Cook's distance
+
+
+autoplot(causdmg.lm1.step,which=5,ncol = 1, label.size = 3) + theme_bw() #Redisuals vs. Leverage
+
+
+autoplot(causdmg.lm1.step,which=6, ncol = 1, label.size = 3) + theme_bw() #Cook's dist vs. Leverage
 ```
 
