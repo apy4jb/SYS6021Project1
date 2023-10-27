@@ -1,0 +1,282 @@
+---
+title: "Mitch - Group Project 1"
+author: "Mitch Whalen"
+date: "2023-10-27"
+output: html_document
+---
+## Setup
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Set directories
+traindir <- "/Users/mitchellwhalen/Library/CloudStorage/GoogleDrive-maw9byk@virginia.edu/My Drive/UVA Fall 2023/Statistical Modeling/In Class/Train Data"
+sourcedir <-"/Users/mitchellwhalen/Library/CloudStorage/GoogleDrive-maw9byk@virginia.edu/My Drive/UVA Fall 2023/Statistical Modeling/In Class/R Code"
+
+# load data
+setwd(sourcedir)
+source("AccidentInput.R")
+
+# load libraries
+library(ggplot2)
+library(dplyr)
+library(psych)
+library(lattice)
+library(here)
+library(ggpubr)
+library(ggfortify)
+library(MASS)
+library(lindia)
+library(data.table)
+library(plyr)
+library(scales)
+library(grid)
+library(GGally)
+library(car)
+library(lmtest)
+library(RColorBrewer)
+library("gplots")
+library(caret)
+```
+
+## Load and filter data to extreme accidents
+
+Here we are loading the accident data, assigning labels, and then filtering to only extreme
+accidents. Extreme accidents are all accidents with damages above the upper whisker
+
+```{r}
+acts <- file.inputl(traindir)
+
+totacts <- combine.data(acts)
+
+##Build a data frame with only extreme accidents for ACCDMG
+
+dmgbox <-boxplot(totacts$ACCDMG)
+
+ggplot(as.data.frame(totacts$ACCDMG), aes(x=totacts$ACCDMG)) + 
+  geom_boxplot(col= "steelblue") + theme(plot.title = element_text(hjust = 0.5)) + coord_flip()
+
+xdmg <- totacts[totacts$ACCDMG > dmgbox$stats[5],]
+
+#remove 9/11
+xdmg <- xdmg[-181,]
+
+## Remove duplicates from xdmg and call new data frame xdmgnd
+xdmgnd <- xdmg[!(duplicated(xdmg[, c("INCDTNO", "YEAR", "MONTH", "DAY", "TIMEHR", "TIMEMIN")])),]
+
+# Setup categorical variables
+xdmgnd$Cause <- rep(NA, nrow(xdmgnd))
+
+xdmgnd$Cause[which(substr(xdmgnd$CAUSE, 1, 1) == "M")] <- "M"
+xdmgnd$Cause[which(substr(xdmgnd$CAUSE, 1, 1) == "T")] <- "T"
+xdmgnd$Cause[which(substr(xdmgnd$CAUSE, 1, 1) == "S")] <- "S"
+xdmgnd$Cause[which(substr(xdmgnd$CAUSE, 1, 1) == "H")] <- "H"
+xdmgnd$Cause[which(substr(xdmgnd$CAUSE, 1, 1) == "E")] <- "E"
+
+# This new variable, Cause, has to be a factor
+
+xdmgnd$Cause <- factor(xdmgnd$Cause)
+
+# Convert Type to a factor and give more meaningful labels
+xdmgnd$Type <- factor(xdmgnd$TYPE, labels = c("Derailment", "HeadOn", "Rearend", "Side", "Raking", "BrokenTrain", "Hwy-Rail", "GradeX", "Obstruction", "Explosive", "Fire","Other","SeeNarrative"))
+
+# Type of train
+xdmgnd$TYPEQ <- as.numeric(xdmgnd$TYPEQ)
+
+# Now convert to factor with meaningful labels
+xdmgnd$TYPEQ <- factor(xdmgnd$TYPEQ, labels = c("Freight", "Passenger", "Commuter", "Work",  "Single", "CutofCars", "Yard", "Light", "Maint"))
+
+```
+
+## Generating Hypothesis based on Type of Train and Type of Accident
+
+We looked at the frequency of the different types of trains and types of accidents in order to
+discern any notable patterns.
+
+```{r, echo=FALSE}
+# Bar Graph of TYPEQ in xdmgnd
+ggplot(as.data.frame(table(xdmgnd$TYPEQ)), aes(x = Var1, y= Freq)) +
+  geom_bar(stat="identity",fill= "steelblue")+ 
+  ggtitle("Accident Frequency by TypeQ (xdmgnd)") +
+  labs(x = "Type of Train")+
+  theme(axis.text.x = element_text(size = 8,  angle = 45))
+
+# Bar Graph of Type in xdmgnd
+ggplot(as.data.frame(table(xdmgnd$Type)), aes(x = Var1, y= Freq)) +
+  geom_bar(stat="identity",fill= "steelblue")+ 
+  ggtitle("Accident Frequency by Type (xdmgnd)") +
+  labs(x = "Type of Accident")+
+  theme(axis.text.x = element_text(size = 8,  angle = 45))
+```
+Clearly the most extreme accidents disproportionately involve freight trains and derailment.
+
+```{r, echo=FALSE}
+# Plot scaled (log) accident damage grouped by TypeQ using bwplot (from lattice package)
+bwplot(
+  TYPEQ~ log(ACCDMG+1), 
+  main = "Box Plots of Log(Accident Damage)", 
+  xlab = "log(Damage ($))", ylab = "Type of Train", data = xdmgnd
+)
+
+# Plot scaled (log) accident damage grouped by Type using bwplot (from lattice package)
+bwplot(
+  Type~ log(ACCDMG+1), 
+  main = "Box Plots of Log(Accident Damage)", 
+  xlab = "log(Damage ($))", ylab = "Type of Accident", data = xdmgnd
+)
+```
+Freight, Commuter, & Passenger trains typically have the greatest damages, while the different
+types of accidents don't seem to vary much in terms of accident damage (GradeX has a very small
+sample size), however we can see an head on collisions seem to be especially damaging and
+derailment accidents have high potential for damage as shown by their outliers.
+
+```{r, echo=False}
+# types of each type of train's accidents
+ggplot(xdmgnd, aes(x=TYPEQ, fill=Type), reorder(Type)) +
+  geom_bar(position="fill") +
+  scale_fill_brewer(palette = "Spectral") + #https://r-graph-gallery.com/38-rcolorbrewers-palettes.html
+  coord_flip()
+```
+
+The most apparent pattern to us was the difference in types of accidents between Freight and
+Passenger/Commuter trains. AS you can see freight trains were typically involved in derailment
+accidents, while passenger/commuter trains were far more frequently involved in Hwy_Rail
+Accidents. NOTE: Moving forward we will group Passenger & Commuter trains since both serve a
+similar purpose and carry passengers.
+
+The last aspect we wanted to explore was train speed. Because different tyoes of trains may
+operate in different fashions, we suspect that this could influence their speed and potential to
+affect accidents.
+
+```{r, echo=False}
+# Looking for interactions between TRNSPD & ACCDMG by TYPEQ
+qplot(log(ACCDMG), TRNSPD, data = xdmgnd) +  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) + facet_wrap(~ TYPEQ)
+
+# Looking for interactions between TRNSPD & ACCDMG by Type
+qplot(log(ACCDMG), TRNSPD, data = xdmgnd) +  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) + facet_wrap(~ Type)
+```
+There appears to be some interaction here with train speed. It appears there is at least a
+slight interaction between speed and accident damage when it comes to freight trains and
+commuter trains. There also appears to be an interaction with some accident types including
+derailments, head-on, and side accidents.
+
+# Hypothesis
+
+Based on the visualizations, one can see that the Freight train accidents are far more likely to
+result in extreme outcomes than accidents involving other types of trains. Most extreme freight
+train accidents are derailments. This contrasts, passenger and commuter trains where a greater
+proportion accidents are of the highway-rail type. Given these observations, I hypothesize that
+the type of train (specifically the levels of freight or passenger/commuter), the type of
+accident (specifically the levels of derailment or Hwy-Rail), and their interaction can be used
+to predict accident damage. In addition, it is apparent that there is a significant interaction
+between train speed and accident damage, and if we group by type of accident and type of train
+we can see that the strength of the interaction appears to vary based on type of accident and type of train.
+
+H0: Type of train (PassCom or Freight), type of accident (Derail or Hwy_Rail), and train speed
+have no significant relationship with accident damage
+Ha: Type of train (PassCom or Freight), type of accident (Derail or Hwy_Rail), and train speed
+have a significant relationship with accident damage
+
+## Analysis & Model Building
+
+Prepping to test hypothesis:
+```{r}
+# Remove rows in dmgnd where there is a null value for TYPEQ or Type (got code from ChatGPT)
+xdmgnd <- xdmgnd[complete.cases(xdmgnd[c("TYPEQ", "Type")]), ]
+
+# Create Necessary Dummy Variables
+xdmgnd$Derail <- (xdmgnd$Type == "Derailment")
+xdmgnd$Hwy_Rail <- (xdmgnd$Type == "Hwy-Rail")
+xdmgnd$Freight <- (xdmgnd$TYPEQ == "Freight")
+xdmgnd$PassCom <- ifelse(xdmgnd$Type %in% c("Passenger", "Commuter"), TRUE, FALSE) #Grouped because commuter train carries passengers
+```
+
+Multiple Linear Regression using TYPEQ to Predict ACCDMG (LM1)
+```{r}
+xdmgnd.lm1<-lm(ACCDMG~Freight+PassCom, data=xdmgnd)
+summary(xdmgnd.lm1)
+```
+Multiple Linear Regression using Type to Predict ACCDMG (LM2)
+```{r}
+xdmgnd.lm2<-lm(ACCDMG~Derail+Hwy_Rail, data=xdmgnd)
+summary(xdmgnd.lm2)
+```
+Multiple Linear Regression using Type & TYPEQ to Predict ACCDMG (LM3)
+```{r}
+xdmgnd.lm3<-lm(ACCDMG~Freight+PassCom+Derail+Hwy_Rail,data=xdmgnd)
+summary(xdmgnd.lm3)
+```
+Models LM1-3 have almost no predictive value based on their R^2. We will explore the
+2nd order model as well as their interaction with speed to try and build a more predictive model
+
+Multiple Linear Regression using Type & TYPEQ plus interactions to Predict ACCDMG (LM4)
+```{r}
+xdmgnd.lm4<-lm(ACCDMG~(Freight+PassCom+Derail+Hwy_Rail)^2,data=xdmgnd)
+summary(xdmgnd.lm4)
+```
+Still very low predictive value
+
+Will now add in train speed to hopefully improve model performance.
+Multiple Linear Regression main effects using Type, TYPEQ, & TRNSPD to Predict ACCDMG (LM5)
+```{r}
+xdmgnd.lm5<-lm(ACCDMG~Freight+PassCom+Derail+Hwy_Rail+TRNSPD,data=xdmgnd)
+summary(xdmgnd.lm5)
+```
+Multiple Linear Regression 2nd order model using Type, TYPEQ, & TRNSPD to Predict ACCDMG (LM6)
+```{r}
+xdmgnd.lm6 <- lm(ACCDMG ~ (Freight + PassCom + Derail + Hwy_Rail + TRNSPD)^2, data = xdmgnd)
+summary(xdmgnd.lm6)
+AIC(xdmgnd.lm6)
+```
+Adding TrnSpd to the model instantly boosted the model demonstrating its importance in
+predicting accident damage. Including its interactions also improved the model slightly.
+
+#Diagnostics, Transformations, & Variable Selection
+We first needed to examine our diagnostic plots to see if LM6 is was meeting basic regression assumptions
+```{r, echo=False}
+autoplot(xdmgnd.lm6, which=1:6, label.size = 3) + theme_bw()
+```
+Immediately we can see clear heteroscedasticity as evidenced by the residual v fitted and QQ plot. We cna also, see at least 3 observations with concerning Cook's distance values.
+Therefore we know we will need to transform our response variable. For this we will use a Box Cox transformation
+```{r}
+# Box Cox
+gg_boxcox(xdmgnd.lm6)
+#The best lambda and store in L
+L<-boxcox(xdmgnd.lm6, plotit = F)$x[which.max(boxcox(xdmgnd.lm6, plotit = F)$y)] 
+L
+```
+Now that we have an optimal lambda value of -0.5, we can use this to transform accident damage and improve LM6
+```{r}
+# The model with the best lamda transformation (LM6.boxcox)
+xdmgnd.lm6.boxcox<-lm((ACCDMG^L-1)/L~(Freight + PassCom + Derail + Hwy_Rail + TRNSPD)^2,data=xdmgnd)
+# Display regression results for boxcox model
+summary(xdmgnd.lm6.boxcox)
+AIC(xdmgnd.lm6.boxcox)
+```
+This transformation also greatly improved the predictive value of the model.
+
+Now we will recheck the diagnostics plots
+```{r,echo=False} 
+autoplot(xdmgnd.lm6.boxcox, which=1:6, label.size = 3) + theme_bw()
+```
+As we can see we have addressed the galring heteroscedasticity issue. Some heteroscedasticity
+remains as we can see in the residuals vs fitted plot, but we can see it is clearly much improved. Also, there are no concerning Cook's distance values.
+
+We next aimed to trim our model using stepwise regression
+We used backwards elimination to trim our model and remove insignificant predictors.
+```{r}
+xdmgnd.lm6.step <- step(xdmgnd.lm6.boxcox, direction = "backward", Trace = F)
+summary(xdmgnd.lm6.step) 
+AIC(xdmgnd.lm6.step)
+anova(xdmgnd.lm6.boxcox,xdmgnd.lm6.step)
+```
+This backward elimination process removed the PassCom variable and its interactions as well as
+Hwy_Rail:TRNSPD and FreightTRUE:Hwy_RailTRUE
+The AIC is slightly lower than the full model but Adj. R^2 is the same.
+Because the partial f-test has a p-value > 0.05, we can be confident that none of the removed
+predictors were significant and we will move forward with the stepwise mode
+
+## Evidence & Recommendation to FRA
+
+COMING SOON
