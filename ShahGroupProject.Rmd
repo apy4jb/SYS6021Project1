@@ -1,19 +1,19 @@
 ---
-title: "Preet-Group Project 1"
+  title: "Preet-Group Project 1"
 output: html_notebook
 --
   
-#Hypothesis: The time of day influences the number of casualties in accidents. 
-#Null Hypothesis: There is no significant difference in the number of casualties in daytime accidents compared to nighttime accidents. 
-#Alternative Hypothesis: Daytime accidents have significantly different casualty counts compared to nighttime accidents.
+  #Hypothesis: The time of day influences the number of casualties in accidents. 
+  #Null Hypothesis: There is no significant difference in the number of casualties in daytime accidents compared to nighttime accidents. 
+  #Alternative Hypothesis: Daytime accidents have significantly different casualty counts compared to nighttime accidents.
   
-
-traindir <- "/Users/preetthegr8est/Desktop/UVA/fall 23/Stats/lab2/TrainData"
+  
+  traindir <- "/Users/preetthegr8est/Desktop/UVA/fall 23/Stats/lab2/TrainData"
 sourcedir <-"/Users/preetthegr8est/Desktop/UVA/fall 23/Stats/lab2"
 
 setwd(sourcedir)
 source("AccidentInput.r")
-
+library(MASS)
 library(dplyr)
 library(ggplot2)
 library(car)
@@ -101,12 +101,14 @@ if (t_test_result$p.value < 0.05) {
 #The 95 percent confidence interval for the difference in means is [-0.8371525, 2.6548912]. 
 #This interval includes zero, further suggesting no statistically significant difference in means.
 
+#Create Binary Variable AMPM
+combined_data$AMPM <- ifelse(combined_data$Data_Type == "Dark", 1, 0)
 # Linear Model
 lm_model <- lm(Casualty ~ AMPM, data = combined_data)
 summary(lm_model)
-
+AIC(lm_model)
 #The F-statistic tests whether the addition of the "AMPM" variable as a predictor is significant. 
-#In this case, the F-statistic is 1.026, and the associated p-value is 0.3113, which is greater than 0.05.
+#In this case, the F-statistic is 1.026, and the associated p-value is 0.3314, which is greater than 0.05.
 #The Adjusted R-squared and the Multiple R-squared values are close to zero. 
 #This indicates that the model explains very little of the variance in the number of casualties.
 
@@ -121,8 +123,65 @@ plot(lm_model, which = 4)
 #The Cook's Distance Plot suggests non-influential observations.
 
 
+
+#Transformation
+#Adding more Predictor Variables
+trans_model <- lm(Casualty ~ AMPM + WEATHER + TEMP + VISIBLTY, data = df2)
+summary(trans_model)
+AIC(trans_model)
+#From the Adjusted R-squared,F-statistic, AIC and p-value: we can observe that the influence of time of the day is still not significant.
+#But the influence of TEMP is marginally  statistically significant. 
+
+par(mfrow = c(2, 2))
+plot(trans_model, which = 1)
+plot(trans_model, which = 2)
+plot(trans_model, which = 3)
+plot(trans_model, which = 4)
+
+#From the diagnostic plots we can conclude non-linearity, non-normality, and heteroscedasticity.
+#The Cook's Distance Plot suggests some influential observations.
+
+
+#Box Cox
+boxcox_result <- boxcox(lm(Casualty ~ 1, data = df2))
+lambda_optimal <- boxcox_result$x[which.max(boxcox_result$y)]
+df2$CasualtyBoxCox <- (df2$Casualty^lambda_optimal - 1) / lambda_optimal
+
+bc_model <- lm(CasualtyBoxCox ~ AMPM, data = df2)
+summary(bc_model)
+AIC(bc_model)
+#From the Adjusted R-squared,F-statistic, AIC and p-value: we can observe that the influence of time of the day is still not significant.
+
+par(mfrow = c(2, 2))
+plot(bc_model, which = 1)
+plot(bc_model, which = 2)
+plot(bc_model, which = 3)
+plot(bc_model, which = 4)
+
+#From the diagnostic plots we can conclude non-linearity, non-normality, and heteroscedasticity.
+#The Cook's Distance Plot suggests no-influential observations.
+
+#Log Transformation
+df2$LogCasualty <- log(df2$Casualty + 1)
+lg_model <- lm(LogCasualty ~ AMPM, data = df2)
+summary(lg_model)
+AIC(lg_model)
+#From the Adjusted R-squared,F-statistic, AIC and p-value: we can observe that the influence of time of the day is still not significant.
+
+par(mfrow = c(2, 2))
+plot(lg_model, which = 1)
+plot(lg_model, which = 2)
+plot(lg_model, which = 3)
+plot(lg_model, which = 4)
+
+#From the diagnostic plots we can conclude non-linearity, non-normality, and heteroscedasticity.
+#The Cook's Distance Plot suggests no-influential observations.
+
+
+
+
 #Conclusion:
-#We fail to reject the null hypothesis. therefore, there is no strong evidence to suggest that the mean number of casualties in the dark significantly differs from the mean number of casualties in the day light.
+#We fail to reject the null hypothesis. therefore, there is no strong evidence to suggest that the mean number of casualties in the dark is significantly different from the mean number of casualties in the day light.
 
 #Reccomendation:
 #The objective of this hypothesis was to investigate the potential relationship between sunlight and casualties, aiming to provide safety-related recommendations to the Federal Railroad Administration (FRA). 
@@ -132,9 +191,5 @@ plot(lm_model, which = 4)
 #Nevertheless, we also suggest that certain factors be continuously monitored, as they may still hold significance in influencing safety outcomes in the future.
 
 
+
 #https://uknowledge.uky.edu/ktc_researchreports/1069/
-
-
-
-
-
