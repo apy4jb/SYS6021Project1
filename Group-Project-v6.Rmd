@@ -1,6 +1,6 @@
 ---
 title: "Group Project 1"
-author: "Preet Shah, Lea Jih-Vieira, Mitchell Whalen, & Blake Zimbardo"
+author: "Preet Shah, Lea Jih-Vieira, Mitchell Whalen, & Blake Zimbardi"
 date: "`r Sys.Date()`"
 output:
   pdf_document: default
